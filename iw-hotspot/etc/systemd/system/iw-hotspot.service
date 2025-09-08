@@ -1,0 +1,27 @@
+[Unit]
+Description=Hotspot automático com iw-hotspot
+After=network.target
+Wants=network.target
+After=network-online.target
+Wants=network-online.target
+After=hostapd.service
+Wants=hostapd.service
+After=dnsmasq.service
+Wants=dnsmasq.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/local/bin/iw-hotspot
+ExecStartPost=/bin/sleep 5
+ExecStartPost=/bin/systemctl try-restart hostapd
+ExecStartPost=/bin/systemctl try-restart dnsmasq
+ExecStartPost=/bin/sleep 10
+ExecStartPost=/bin/systemctl restart hostapd
+ExecStartPost=/bin/systemctl restart dnsmasq
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target
+

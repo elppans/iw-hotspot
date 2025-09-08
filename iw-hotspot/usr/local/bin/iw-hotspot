@@ -1,0 +1,87 @@
+#!/bin/bash
+
+# Nome do comando/script
+command="$(basename "$0")"
+
+# Diretório de log
+log_dir="/tmp"
+mkdir -p "$log_dir"
+
+# Arquivos de log
+timestamp="$(date +'%Y%m%d_%H%M%S')"
+log_file="${log_dir}/${command}_${timestamp}.log"
+log_error="${log_dir}/${command}_${timestamp}_error.log"
+
+# Garantir arquivos e permissão
+touch "$log_file" "$log_error"
+chmod 644 "$log_file" "$log_error"
+
+# Redirecionamento de saída
+exec > >(tee -a "$log_file") 2> >(tee -a "$log_error" >&2)
+
+# Função para log com timestamp
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+# Verificação de permissões
+if [[ $EUID -ne 0 ]]; then
+    log "Este script precisa ser executado como root."
+    exit 1
+fi
+
+# Mensagem inicial
+log "Iniciando script: $command"
+log "Log de saída: $log_file"
+log "Log de erro: $log_error"
+
+
+iw list | grep -A 10 "Supported interface modes" ;
+iw dev wlo1 interface add ap0 type __ap ;
+sleep 2
+ip addr add 192.168.150.1/24 dev ap0 ;
+sleep 2
+ip link set ap0 up ;
+
+iptables -t nat -A POSTROUTING -o wlo1 -j MASQUERADE ;
+iptables -A FORWARD -i ap0 -o wlo1 -j ACCEPT ;
+iptables -A FORWARD -i wlo1 -o ap0 -m state --state RELATED,ESTABLISHED -j ACCEPT ;
+
+sysctl -w net.ipv4.ip_forward=1 ;
+
+# sudo systemctl unmask hostapd # Se estiver mascarado
+# systemctl stop hostapd ; sleep 2
+# systemctl start hostapd ; sleep 2
+# sudo systemctl status hostapd | cat
+
+# systemctl stop dnsmasq ; sleep 2
+# systemctl start dnsmasq ; sleep 2
+# sudo systemctl status dnsmasq | cat
+
+# Anotações
+# https://github.com/elppans/doc-linux/blob/main/ubuntu_criar_interface_de_rede.md
+
+# Verificar status
+
+# iw (interface wireless)
+log "Escaneando redes Wi-Fi..."
+iw dev wlan0 link             # Mostra detalhes da conexão atual
+iw dev wlan0 scan             # Escaneia redes disponíveis (bem detalhado)
+iw list                       # Lista capacidades do driver (muito verboso por padrão)
+
+# ip (configuração de rede)
+log "Verificando interfaces de rede..."
+ip -s addr show               # Mostra estatísticas de pacotes por interface
+ip -s link show               # Detalhes da camada de enlace
+
+# iptables (firewall)
+log "Regras de firewall:"
+sudo iptables -L -v -n        # -v para verbose, -n para evitar resolução de nomes
+sudo iptables -S              # Lista regras como comandos
+
+# sysctl (parâmetros do kernel)
+log "Parâmetros do kernel:"
+# sysctl -a                     # Mostra todos os parâmetros e seus valores
+sysctl net.ipv4.ip_forward    # Mostra um parâmetro especifico
+
+log "Script finalizado com sucesso."
