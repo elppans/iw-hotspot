@@ -1,0 +1,27 @@
+# Ps.: Não é mais necessário, foi configurado o serviço iw-hotstpot com todos os comandos e está funcionando
+
+Alterar serviço sem mexer nos arquivos originais:
+
+Criar um override em para hostapd.service:
+
+sudo mkdir -p /etc/systemd/system/hostapd.service.d
+echo -e '[Unit]\nAfter=iw-hotspot.service\nRequires=iw-hotspot.service' | sudo tee /etc/systemd/system/hostapd.service.d/override.conf
+sudo systemctl daemon-reload
+sudo systemctl restart hostapd
+systemctl cat hostapd | grep -A5 "Unit"
+systemctl list-dependencies hostapd | cat
+
+
+Criar um override em para dnsmasq.service:
+
+sudo mkdir -p /etc/systemd/system/dnsmasq.service.d
+echo -e '[Unit]\nAfter=iw-hotspot.service\nRequires=iw-hotspot.service' | sudo tee /etc/systemd/system/dnsmasq.service.d/override.conf
+sudo systemctl daemon-reload
+sudo systemctl restart hostapd
+systemctl cat dnsmasq | grep -A5 "Unit"
+systemctl list-dependencies dnsmasq | cat
+
+___
+
+# Ps.: Não é mais necessário, foi configurado o serviço iw-hotstpot com todos os comandos e está funcionando
+
