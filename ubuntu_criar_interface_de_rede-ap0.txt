@@ -1,0 +1,104 @@
+# ubuntu_criar_interface_de_rede-ap0 (HotSpot)
+
+sudo apt update
+sudo apt install iw bridge-utils hostapd dnsmasq
+sudo apt install hostapd
+echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.conf
+echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+sudo sysctl -w net.ipv4.ip_forward=1
+
+export elan="enp4s0"
+export wlan="wlp5s0"
+export vlan="ap0"
+
+sudo iw dev "$wlan" interface add "$vlan" type __ap ;
+sleep 2
+sudo ip addr add 192.168.222.1/24 dev "$vlan" ;
+sleep 2
+sudo ip link set "$vlan" up ;
+
+# elan wlan
+sudo iptables -t nat -A POSTROUTING -o "$wlan" -j MASQUERADE ;
+sudo iptables -A FORWARD -i "$elan" -o "$wlan" -j ACCEPT ;
+sudo iptables -A FORWARD -i "$wlan" -o "$elan" -m state --state RELATED,ESTABLISHED -j ACCEPT ;
+
+# wlan vlan
+sudo iptables -t nat -A POSTROUTING -o "$wlan" -j MASQUERADE ;
+sudo iptables -A FORWARD -i "$vlan" -o "$wlan" -j ACCEPT ;
+sudo iptables -A FORWARD -i "$wlan" -o "$vlan" -m state --state RELATED,ESTABLISHED -j ACCEPT ;
+
+# elan vlan
+sudo iptables -t nat -A POSTROUTING -o "$elan" -j MASQUERADE ;
+sudo iptables -A FORWARD -i "$vlan" -o "$elan" -j ACCEPT ;
+sudo iptables -A FORWARD -i "$elan" -o "$vlan" -m state --state RELATED,ESTABLISHED -j ACCEPT ;
+
+
+echo -e "
+interface="$vlan"
+dhcp-range=192.168.222.111,192.168.222.222,12h
+port=0
+dhcp-option=option:dns-server,8.8.8.8
+" | sudo tee -a /etc/dnsmasq.conf &>>/dev/null
+
+echo -e "
+interface="$vlan"
+driver=nl80211
+ssid=WiFi-VLAN
+# 2.4 GHz
+#hw_mode=g
+#channel=6
+# 5 GHz
+hw_mode=a
+channel=36
+auth_algs=1
+wmm_enabled=0
+wpa=2
+wpa_passphrase=senha123
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
+" | sudo tee -a /etc/hostapd/hostapd.conf
+
+echo -e 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' | sudo tee -a /etc/default/hostapd
+
+sudo systemctl restart dnsmasq
+sudo systemctl start hostapd
+
+sudo rm -rf /usr/local/bin/iw-hotspot
+sudo curl -JLk -o /usr/local/bin/iw-hotspot "https://raw.githubusercontent.com/elppans/iw-hotspot/refs/heads/main/iw-hotspot/usr/local/bin/iw-hotspot"
+sudo chmod +x /usr/local/bin/iw-hotspot
+
+sudo curl -JLk -o /etc/systemd/system/iw-hotspot.service "https://raw.githubusercontent.com/elppans/iw-hotspot/refs/heads/main/iw-hotspot/etc/systemd/system/iw-hotspot.service"
+
+sudo systemctl daemon-reload
+sudo systemctl enable iw-hotspot.service
+sudo systemctl stop iw-hotspot.service
+sudo systemctl start iw-hotspot.service
+systemctl status iw-hotspot.service
+# journalctl -xeu iw-hotspot.service # Usar se não funcionar
+
+sudo systemctl status hostapd
+sudo systemctl unmask hostapd # Se estiver mascarado, desmascarar
+sudo systemctl start hostapd
+journalctl -xeu hostapd # Usar se não funcionar
+#####
+
+# Script direto para testar
+sudo /usr/local/bin/iw-hotspot
+
+# Testar se o Hotspot está funcionando:
+
+sudo hostapd /etc/hostapd/hostapd.conf
+
+# Se WLAN der este erro:
+
+# >rfkill: WLAN soft blocked
+
+# Desbloquear:
+
+rfkill unblock wifi
+rfkill unblock all
+
+# Verificar se o bloqueio foi removido:
+
+rfkill list
+
