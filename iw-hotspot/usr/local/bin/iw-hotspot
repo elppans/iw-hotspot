@@ -35,18 +35,33 @@ log "Iniciando script: $command"
 log "Log de saída: $log_file"
 log "Log de erro: $log_error"
 
+export elan="enp4s0"
+export wlan="wlp5s0"
+export vlan="ap0"
 
 iw list | grep -A 10 "Supported interface modes" ;
-iw dev wlo1 interface add ap0 type __ap ;
+iw dev "$wlan" interface add "$vlan" type __ap ;
 sleep 2
-ip addr add 192.168.150.1/24 dev ap0 ;
+ip addr add 192.168.150.1/24 dev "$vlan" ;
 sleep 2
-ip link set ap0 up ;
+ip link set "$vlan" up ;
 
-iptables -t nat -A POSTROUTING -o wlo1 -j MASQUERADE ;
-iptables -A FORWARD -i ap0 -o wlo1 -j ACCEPT ;
-iptables -A FORWARD -i wlo1 -o ap0 -m state --state RELATED,ESTABLISHED -j ACCEPT ;
+# elan wlan
+iptables -t nat -A POSTROUTING -o "$wlan" -j MASQUERADE ;
+iptables -A FORWARD -i "$elan" -o "$wlan" -j ACCEPT ;
+iptables -A FORWARD -i "$wlan" -o "$elan" -m state --state RELATED,ESTABLISHED -j ACCEPT ;
 
+# wlan vlan
+iptables -t nat -A POSTROUTING -o "$wlan" -j MASQUERADE ;
+iptables -A FORWARD -i "$vlan" -o "$wlan" -j ACCEPT ;
+iptables -A FORWARD -i "$wlan" -o "$vlan" -m state --state RELATED,ESTABLISHED -j ACCEPT ;
+
+# elan vlan
+iptables -t nat -A POSTROUTING -o "$elan" -j MASQUERADE ;
+iptables -A FORWARD -i "$vlan" -o "$elan" -j ACCEPT ;
+iptables -A FORWARD -i "$elan" -o "$vlan" -m state --state RELATED,ESTABLISHED -j ACCEPT ;
+
+echo 1 | tee /proc/sys/net/ipv4/ip_forward
 sysctl -w net.ipv4.ip_forward=1 ;
 
 # sudo systemctl unmask hostapd # Se estiver mascarado
@@ -76,8 +91,8 @@ ip -s link show               # Detalhes da camada de enlace
 
 # iptables (firewall)
 log "Regras de firewall:"
-sudo iptables -L -v -n        # -v para verbose, -n para evitar resolução de nomes
-sudo iptables -S              # Lista regras como comandos
+iptables -L -v -n        # -v para verbose, -n para evitar resolução de nomes
+iptables -S              # Lista regras como comandos
 
 # sysctl (parâmetros do kernel)
 log "Parâmetros do kernel:"
