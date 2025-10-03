@@ -32,6 +32,27 @@ sudo iptables -t nat -A POSTROUTING -o "$elan" -j MASQUERADE ;
 sudo iptables -A FORWARD -i "$vlan" -o "$elan" -j ACCEPT ;
 sudo iptables -A FORWARD -i "$elan" -o "$vlan" -m state --state RELATED,ESTABLISHED -j ACCEPT ;
 
+# Verificando se sua placa Wi-Fi suporta 5 GHz no modo AP
+# Listar frequencias suportadas (2,5 GHz e 5 GHz) para configurar o hostapd
+
+iw list | grep -A 20 "Frequencies" 
+
+# Os canais que aparecer no IR (no initiate radiation), significa que não pode transmitir nesses canais — só escutar. 
+# Você precisa de canais sem no IR.
+# Se sua placa permitir usar 5 GHz, configurar:
+# hw_mode=a = ativa o modo 5 GHz
+# channel=36 = canal comum e permitido no Brasil
+#
+# Ps.: Alguns canais exigem suporte a DFS (radar detection). Recomendado começar com 36, 40, 44 ou 48.
+#
+# Se sua placa Wi-Fi detecta 5 GHz, mas todos os canais estão marcados com:
+#
+# no IR → não pode iniciar transmissão
+# disabled → completamente bloqueado
+# radar detection → requer suporte a DFS, que muitos drivers não têm
+#
+# Não pode transmitir nessa faixa
+# Ou seja: seu hardware ou driver não permite criar AP em 5 GHz. Só funciona como cliente nessa banda.
 
 echo -e "
 interface="$vlan"
@@ -40,14 +61,24 @@ port=0
 dhcp-option=option:dns-server,8.8.8.8
 " | sudo tee -a /etc/dnsmasq.conf &>>/dev/null
 
-echo -e "
-interface="$vlan"
+# hostapd.conf para 2.4 GHz:
+echo -e "interface="$vlan"
 driver=nl80211
 ssid=WiFi-VLAN
-# 2.4 GHz
-#hw_mode=g
-#channel=6
-# 5 GHz
+hw_mode=g
+channel=6
+auth_algs=1
+wmm_enabled=0
+wpa=2
+wpa_passphrase=senha123
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
+" | sudo tee -a /etc/hostapd/hostapd.conf
+
+# hostapd.conf para 5 GHz:
+echo -e "interface="$vlan"
+driver=nl80211
+ssid=WiFi-VLAN
 hw_mode=a
 channel=36
 auth_algs=1
@@ -58,28 +89,35 @@ wpa_key_mgmt=WPA-PSK
 rsn_pairwise=CCMP
 " | sudo tee -a /etc/hostapd/hostapd.conf
 
+# Configurar para que o aplicativo use o arquivo configurado
 echo -e 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' | sudo tee -a /etc/default/hostapd
 
 sudo systemctl restart dnsmasq
 sudo systemctl start hostapd
 
+# Configurar Script para a execução e inicialização da porta virtual "ap0"
+
 sudo rm -rf /usr/local/bin/iw-hotspot
 sudo curl -JLk -o /usr/local/bin/iw-hotspot "https://raw.githubusercontent.com/elppans/iw-hotspot/refs/heads/main/iw-hotspot/usr/local/bin/iw-hotspot"
 sudo chmod +x /usr/local/bin/iw-hotspot
 
+# Configurar Serviço para a execução automatica durante a inicialização de "iw-hotspot"
+
 sudo curl -JLk -o /etc/systemd/system/iw-hotspot.service "https://raw.githubusercontent.com/elppans/iw-hotspot/refs/heads/main/iw-hotspot/etc/systemd/system/iw-hotspot.service"
 
+# Recarregando, reiniciando e iniciando todos os serviços
 sudo systemctl daemon-reload
+sudo systemctl unmask hostapd
+
 sudo systemctl enable iw-hotspot.service
 sudo systemctl stop iw-hotspot.service
 sudo systemctl start iw-hotspot.service
-systemctl status iw-hotspot.service
-# journalctl -xeu iw-hotspot.service # Usar se não funcionar
 
-sudo systemctl status hostapd
-sudo systemctl unmask hostapd # Se estiver mascarado, desmascarar
-sudo systemctl start hostapd
-journalctl -xeu hostapd # Usar se não funcionar
+systemctl status iw-hotspot.service
+systemctl status hostapd.service
+systemctl status dnsmasq.service
+
+
 #####
 
 # Script direto para testar
@@ -101,4 +139,3 @@ rfkill unblock all
 # Verificar se o bloqueio foi removido:
 
 rfkill list
-
