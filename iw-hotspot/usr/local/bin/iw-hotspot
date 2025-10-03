@@ -87,9 +87,11 @@ rfkill unblock all
 # iw (interface wireless)
 log "Escaneando redes Wi-Fi..."
 iw dev                        # Verificar interfaces
-iw dev wlan0 link             # Mostra detalhes da conexão atual
-iw dev wlan0 scan             # Escaneia redes disponíveis (bem detalhado)
+iw dev "$wlan" link             # Mostra detalhes da conexão atual
+iw dev "$wlan" scan             # Escaneia redes disponíveis (bem detalhado)
 iw list                       # Lista capacidades do driver (muito verboso por padrão)
+iw list | grep -A 20 "Frequencies" # Lista frequencias suportadas (2,5 GHz e 5 GHz)
+
 rfkill list                   # Lista dispositivos bloqueados/desbloqueados
 
 # ip (configuração de rede)
