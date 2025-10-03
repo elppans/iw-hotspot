@@ -40,6 +40,8 @@ export wlan="wlp5s0"
 export vlan="ap0"
 
 iw list | grep -A 10 "Supported interface modes" ;
+iw dev "$vlan" del &>>/dev/null
+sleep 2
 iw dev "$wlan" interface add "$vlan" type __ap ;
 sleep 2
 ip addr add 192.168.150.1/24 dev "$vlan" ;
